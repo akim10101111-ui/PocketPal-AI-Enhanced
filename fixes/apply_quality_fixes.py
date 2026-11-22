@@ -28,6 +28,12 @@ def replace_once(relative_path: str, old: str, new: str) -> None:
             for number, line in enumerate(source.splitlines()[:100], 1):
                 print(f"{number}: {line}")
             print("--- end benchmark source anchors ---")
+        if relative_path.endswith("ModelCard/styles.ts") or relative_path.endswith("BenchmarkScreen/styles.ts"):
+            print(f"--- style source: {relative_path} ---")
+            for number, line in enumerate(source.splitlines(), 1):
+                if any(term in line for term in ("card:", "borderColor", "borderRadius", "backgroundColor")):
+                    print(f"{number}: {line}")
+            print("--- end style source ---")
         raise SystemExit(
             f"{relative_path}: expected exactly one match for transformation, found {count}"
         )
