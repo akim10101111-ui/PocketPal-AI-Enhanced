@@ -1,5 +1,9 @@
 import {formatBytes} from '../formatters';
-import {advertisedRamBytes, memoryFitStatus} from '../memoryDisplay';
+import {
+  advertisedRamBytes,
+  effectiveMemoryCeiling,
+  memoryFitStatus,
+} from '../memoryDisplay';
 
 describe('memoryFitStatus', () => {
   const fit = 4e9;
@@ -35,5 +39,21 @@ describe('advertisedRamBytes', () => {
     [40 * GiB, '40 GB'],
   ])('%s bytes reads as %s', (total, expected) => {
     expect(formatBytes(advertisedRamBytes(total), 1)).toBe(expected);
+  });
+});
+
+describe('effectiveMemoryCeiling', () => {
+  it('uses the conservative RAM fallback before calibration', () => {
+    expect(effectiveMemoryCeiling(8e9)).toBe(4.8e9);
+  });
+
+  it('uses calibrated memory but never exceeds physical RAM', () => {
+    expect(effectiveMemoryCeiling(8e9, 5e9, 6e9)).toBe(6e9);
+    expect(effectiveMemoryCeiling(8e9, 12e9, 20e9)).toBe(8e9);
+  });
+
+  it('ignores invalid calibration and protects invalid physical RAM', () => {
+    expect(effectiveMemoryCeiling(8e9, Number.NaN, -1)).toBe(4.8e9);
+    expect(effectiveMemoryCeiling(0, 8e9, 10e9)).toBe(0);
   });
 });
