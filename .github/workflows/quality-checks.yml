@@ -19,6 +19,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate source patch script syntax
+        run: python3 -m py_compile fixes/apply_quality_fixes.py
+
       - name: Select committed source tree
         run: |
           PROJECT_DIR="$GITHUB_WORKSPACE/pocketpal-source"
