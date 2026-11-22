@@ -307,7 +307,7 @@
           "params": 999885952,
           "size_bytes": 806058240,
           "sha256": "8ccc5cd1f1b3602548715ae25a66ed73fd5dc68a210412eea643eb20eb75a135",
-          "min_ram_gb": 2.0,
+          "min_ram_gb": 3.0,
           "obs_tg": 10.3
         },
         {
