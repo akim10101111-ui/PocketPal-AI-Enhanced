@@ -118,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PocketPal-android-test-reports
-          path: ${{ env.PROJECT_DIR }}/app/build/test-results/testProdDebugUnitTest/
+          path: pocketpal-source/android/app/build/test-results/testProdDebugUnitTest/
           if-no-files-found: warn
           retention-days: 14
 
@@ -148,6 +148,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PocketPal-prodDebug-arm64
-          path: ${{ env.APK_PATH }}
+          path: pocketpal-source/android/app/build/outputs/apk/prod/debug/*.apk
           if-no-files-found: error
           retention-days: 30
