@@ -1,0 +1,47 @@
+name: PocketPal cancel obsolete APK runs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/cancel-obsolete-apk-runs.yml'
+
+permissions:
+  actions: write
+
+jobs:
+  cancel-obsolete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep only the newest active Android APK run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RUNS_JSON="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?status=in_progress&per_page=100")"
+          LATEST_APK_RUN_ID="$(printf '%s' "$RUNS_JSON" | jq -r '
+            [.workflow_runs[]
+              | select(.path == ".github/workflows/android-apk.yml")]
+            | sort_by(.run_number)
+            | last
+            | .id // empty
+          ')"
+
+          if [ -z "$LATEST_APK_RUN_ID" ]; then
+            echo "No active Android APK build found."
+            exit 0
+          fi
+
+          echo "Keeping newest active Android APK run: $LATEST_APK_RUN_ID"
+          printf '%s' "$RUNS_JSON" | jq -r '
+            .workflow_runs[]
+            | select(.path == ".github/workflows/android-apk.yml")
+            | .id
+          ' | while IFS= read -r run_id; do
+            [ -n "$run_id" ] || continue
+            [ "$run_id" = "$LATEST_APK_RUN_ID" ] && continue
+            echo "Cancelling obsolete Android APK run: $run_id"
+            gh api --silent --method POST \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" || true
+          done
