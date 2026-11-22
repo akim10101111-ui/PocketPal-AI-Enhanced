@@ -86,7 +86,6 @@ replace_once(
         }.getOrNull()
       }
       if (coreCount > 2 && cpuCapacities.size == coreCount) {
-        val maxCapacity = cpuCapacities.maxOrNull() ?: 0
         countPerformanceCores(cpuCapacities)?.let { performanceCores ->
           cpuInfo.putInt("performanceCores", performanceCores)
         }
