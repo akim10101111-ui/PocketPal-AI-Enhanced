@@ -425,11 +425,6 @@ replace_once(
 # 5) Small, non-chat visual polish: soften model borders and make benchmark
 # cards follow the same rounded, theme-aware surface treatment.
 replace_once(
-    "src/screens/ModelsScreen/ModelCard/styles.ts",
-    "      borderColor: theme.colors.outline,\n",
-    "      borderColor: theme.colors.outlineVariant,\n",
-)
-replace_once(
     "src/screens/BenchmarkScreen/styles.ts",
     """    card: {
       marginBottom: 16,
