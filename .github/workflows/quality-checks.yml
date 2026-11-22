@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'fixes/**'
+      - 'pocketpal-source/**'
       - '.github/workflows/quality-checks.yml'
   workflow_dispatch:
 
@@ -18,12 +19,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract bundled project
+      - name: Select committed source tree
         run: |
-          unzip -q pocketpal-ai-improved-v3.zip -d extracted
-          PROJECT_DIR="$(dirname "$(find extracted -type f -name package.json -not -path '*/node_modules/*' -print -quit)")"
-          if [ -z "$PROJECT_DIR" ] || [ ! -d "$PROJECT_DIR" ]; then
-            echo "::error::Could not locate the project root"
+          PROJECT_DIR="$GITHUB_WORKSPACE/pocketpal-source"
+          if [ ! -f "$PROJECT_DIR/package.json" ] || [ ! -f "$PROJECT_DIR/android/gradlew" ]; then
+            echo "::error::Committed PocketPal source tree is incomplete"
             exit 1
           fi
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
@@ -32,10 +32,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22.21.0'
-
-      - name: Apply project fixes
-        run: |
-          python3 "$GITHUB_WORKSPACE/fixes/apply_quality_fixes.py" "$PROJECT_DIR"
 
       - name: Install dependencies
         run: |
@@ -52,10 +48,10 @@ jobs:
       - name: Format and lint changed TypeScript files
         run: |
           cd "$PROJECT_DIR"
-          yarn prettier --write src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/useMemoryCheck.ts src/hooks/__tests__/useMemoryCheck.test.ts src/store/ModelStore.ts src/screens/ModelsScreen/ModelCard/styles.ts src/screens/BenchmarkScreen/styles.ts
-          yarn eslint src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/useMemoryCheck.ts src/hooks/__tests__/useMemoryCheck.test.ts src/store/ModelStore.ts src/screens/ModelsScreen/ModelCard/styles.ts src/screens/BenchmarkScreen/styles.ts
+          yarn prettier --write src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/useMemoryCheck.ts src/hooks/__tests__/useMemoryCheck.test.ts src/store/ModelStore.ts src/screens/ModelsScreen/ModelCard/styles.ts src/screens/BenchmarkScreen/styles.ts src/services/deviceRules/selection.ts src/services/deviceRules/__tests__/selection.test.ts
+          yarn eslint src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/useMemoryCheck.ts src/hooks/__tests__/useMemoryCheck.test.ts src/store/ModelStore.ts src/screens/ModelsScreen/ModelCard/styles.ts src/screens/BenchmarkScreen/styles.ts src/services/deviceRules/selection.ts src/services/deviceRules/__tests__/selection.test.ts
 
       - name: Run focused tests
         run: |
           cd "$PROJECT_DIR"
-          yarn jest --runInBand --coverage=false --runTestsByPath src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/__tests__/useMemoryCheck.test.ts
+          yarn jest --runInBand --coverage=false --runTestsByPath src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/__tests__/useMemoryCheck.test.ts src/services/deviceRules/__tests__/selection.test.ts
