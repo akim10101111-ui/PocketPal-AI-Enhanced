@@ -28,7 +28,7 @@ This update combines a focused stability patch with a restrained visual refresh 
 - Settings screen: more breathing room, clearer surface separation, softer rounded cards, consistent horizontal padding, and less crowded vertical rhythm.
 - Model cards: refined corner radius, clearer surface/border contrast, improved internal spacing, and more comfortable details spacing.
 - Pals screen: more deliberate top spacing and a safer bottom content inset so cards do not feel cramped near the floating/bottom controls.
-- Chat composer: modern rounded input surface with a subtle outline, reduced oversized padding, and a more balanced control row while retaining multiline input limits.
+- Chat screen and composer: deliberately unchanged; the previous composer-style experiment was reverted to the upstream PocketPal file.
 - Changes use the existing theme tokens so light/dark mode remain theme-driven. This is a visual refinement pass, not a full redesign of every screen; a complete redesign still needs screenshot/device review.
 
 ## Regression tests added/updated
