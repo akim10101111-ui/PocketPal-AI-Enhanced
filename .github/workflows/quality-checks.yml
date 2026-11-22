@@ -1,0 +1,66 @@
+name: PocketPal quality checks
+
+on:
+  push:
+    paths:
+      - 'fixes/**'
+      - '.github/workflows/quality-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract bundled project
+        run: |
+          unzip -q pocketpal-ai-improved-v3.zip -d extracted
+          PROJECT_DIR="$(dirname "$(find extracted -type f -name package.json -not -path '*/node_modules/*' -print -quit)")"
+          if [ -z "$PROJECT_DIR" ] || [ ! -d "$PROJECT_DIR" ]; then
+            echo "::error::Could not locate the project root"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.21.0'
+
+      - name: Apply project fixes
+        run: |
+          cd "$PROJECT_DIR"
+          for PATCH_FILE in "$GITHUB_WORKSPACE"/fixes/*.patch; do
+            [ -f "$PATCH_FILE" ] || continue
+            echo "Checking $PATCH_FILE"
+            git apply --check "$PATCH_FILE"
+            git apply "$PATCH_FILE"
+          done
+
+      - name: Install dependencies
+        run: |
+          cd "$PROJECT_DIR"
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+          yarn install --frozen-lockfile
+
+      - name: TypeScript type check
+        run: |
+          cd "$PROJECT_DIR"
+          yarn typecheck
+
+      - name: Lint changed TypeScript files
+        run: |
+          cd "$PROJECT_DIR"
+          yarn eslint src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx
+
+      - name: Run focused tests
+        run: |
+          cd "$PROJECT_DIR"
+          yarn jest --runInBand --runTestsByPath src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/__tests__/useMemoryCheck.test.ts
