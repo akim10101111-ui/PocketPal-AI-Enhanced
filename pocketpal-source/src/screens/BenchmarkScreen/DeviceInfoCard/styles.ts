@@ -8,7 +8,7 @@ export const createStyles = (theme: Theme) =>
       marginBottom: 16,
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
-      borderColor: theme.colors.outline,
+      borderColor: theme.colors.outlineVariant,
       borderRadius: 15,
     },
     deviceInfoRow: {
