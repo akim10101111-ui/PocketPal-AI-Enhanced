@@ -49,10 +49,11 @@ jobs:
           cd "$PROJECT_DIR"
           yarn typecheck
 
-      - name: Lint changed TypeScript files
+      - name: Format and lint changed TypeScript files
         run: |
           cd "$PROJECT_DIR"
-          yarn eslint src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx
+          yarn prettier --write src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/useMemoryCheck.ts src/hooks/__tests__/useMemoryCheck.test.ts src/store/ModelStore.ts
+          yarn eslint src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/useMemoryCheck.ts src/hooks/__tests__/useMemoryCheck.test.ts src/store/ModelStore.ts
 
       - name: Run focused tests
         run: |
