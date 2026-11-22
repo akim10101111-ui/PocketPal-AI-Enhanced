@@ -13,14 +13,10 @@ import {
 // 1. modelStore is instantiated after class definition
 // 2. hasEnoughMemory is only called at runtime, not during module initialization
 import {modelStore} from '../store';
-import {MemoryFitStatus} from '../utils/memoryDisplay';
-
-const getFallbackMemoryCeiling = (totalMemory: number): number => {
-  if (!Number.isFinite(totalMemory) || totalMemory <= 0) {
-    return 0;
-  }
-  return Math.max(Math.min(totalMemory * 0.6, totalMemory - 1.2 * 1e9), 0);
-};
+import {
+  effectiveMemoryCeiling,
+  MemoryFitStatus,
+} from '../utils/memoryDisplay';
 
 /**
  * Check if there's enough memory to load a model.
@@ -53,22 +49,14 @@ export const hasEnoughMemory = async (
     }
   }
 
-  // Get calibration data from ModelStore
-  const {largestSuccessfulLoad, availableMemoryCeiling} = modelStore;
-
-  // Calculate ceiling from calibration data
-  let ceiling: number;
-  if (
-    largestSuccessfulLoad !== undefined ||
-    availableMemoryCeiling !== undefined
-  ) {
-    // Use the maximum of both calibration signals
-    ceiling = Math.max(largestSuccessfulLoad ?? 0, availableMemoryCeiling ?? 0);
-  } else {
-    // Cold start: no calibration data yet, use conservative fallback
-    const totalMemory = await DeviceInfo.getTotalMemory();
-    ceiling = getFallbackMemoryCeiling(totalMemory);
-  }
+  // Cap saved calibration against the phone's actual physical RAM. This
+  // also provides one shared conservative fallback before first calibration.
+  const totalMemory = await DeviceInfo.getTotalMemory();
+  const ceiling = effectiveMemoryCeiling(
+    totalMemory,
+    modelStore.largestSuccessfulLoad,
+    modelStore.availableMemoryCeiling,
+  );
 
   const memoryRequirement = getModelMemoryRequirement(
     modelForCalc,
@@ -105,15 +93,11 @@ async function getMemoryFitDetails(
   const totalMemory = await DeviceInfo.getTotalMemory();
 
   // Get learned available ceiling (already includes fallback from ModelStore.initializeStore)
-  const calibratedAvailableBytes = Math.max(
-    modelStore.largestSuccessfulLoad ?? 0,
-    modelStore.availableMemoryCeiling ?? 0,
+  const availableBytes = effectiveMemoryCeiling(
+    totalMemory,
+    modelStore.largestSuccessfulLoad,
+    modelStore.availableMemoryCeiling,
   );
-  // Match hasEnoughMemory while startup calibration is still unavailable.
-  const availableBytes =
-    calibratedAvailableBytes > 0
-      ? calibratedAvailableBytes
-      : getFallbackMemoryCeiling(totalMemory);
 
   // Determine status
   let status: MemoryFitStatus;
