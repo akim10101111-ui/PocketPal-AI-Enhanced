@@ -10,10 +10,11 @@ import {
   getHexagonDisplayName,
   getSoCForHexagonVersion,
   isHexagonVersionSupported,
-  HexagonVersion,
+  type HexagonVersion,
 } from './hexagonCompatibility';
 
-export {HexagonVersion, getHexagonDisplayName, getSoCForHexagonVersion, isHexagonVersionSupported};
+export type {HexagonVersion};
+export {getHexagonDisplayName, getSoCForHexagonVersion, isHexagonVersionSupported};
 
 export interface HexagonInfo {
   version: HexagonVersion;
