@@ -48,6 +48,26 @@ def create_file(relative_path: str, content: str) -> None:
         raise SystemExit(f"Refusing to overwrite existing file: {relative_path}")
     path.write_text(content, encoding="utf-8")
 
+replace_once(
+    "android/app/src/main/java/com/pocketpalai/HardwareInfoModule.kt",
+    "import org.json.JSONObject\n",
+    "import org.json.JSONObject\n" + """
+
+/**
+ * Count CPU cores strictly above half of the strongest reported capacity.
+ * Equal-to-half efficiency cores must not be included. Return null when the
+ * cluster information is uniform or too small to be a safe default.
+ */
+internal fun countPerformanceCores(capacities: List<Int>): Int? {
+  val strongest = capacities.maxOrNull()?.takeIf { it > 0 } ?: return null
+  val count = capacities.count {
+    it > 0 && it.toLong() * 2L > strongest.toLong()
+  }
+  return count.takeIf { it in 2 until capacities.size }
+}
+""",
+)
+
 # 1) Detect performance cores on Android kernels that expose CPU capacity.
 replace_once(
     "android/app/src/main/java/com/pocketpalai/HardwareInfoModule.kt",
@@ -67,14 +87,16 @@ replace_once(
       }
       if (coreCount > 2 && cpuCapacities.size == coreCount) {
         val maxCapacity = cpuCapacities.maxOrNull() ?: 0
-        val performanceCores = cpuCapacities.count {
-          it > 0 && it >= maxCapacity / 2
-        }
-        if (performanceCores in 2 until coreCount) {
+        countPerformanceCores(cpuCapacities)?.let { performanceCores ->
           cpuInfo.putInt("performanceCores", performanceCores)
         }
       }
 ''',
+)
+
+create_file(
+    "android/app/src/test/java/com/pocketpal/HardwareInfoModuleTest.kt",
+    "package com.pocketpal\n\nimport org.junit.Assert.assertEquals\nimport org.junit.Assert.assertNull\nimport org.junit.Test\n\nclass HardwareInfoModuleTest {\n  @Test\n  fun excludesCoresAtExactlyHalfOfMaximumCapacity() {\n    assertEquals(\n      4,\n      countPerformanceCores(\n        listOf(512, 512, 512, 512, 996, 1000, 1010, 1024),\n      ),\n    )\n  }\n\n  @Test\n  fun identifiesThePOCOStylePerformanceCluster() {\n    assertEquals(\n      4,\n      countPerformanceCores(\n        listOf(221, 221, 221, 221, 996, 996, 1000, 1024),\n      ),\n    )\n  }\n\n  @Test\n  fun rejectsUniformOrSingleCoreCapacityData() {\n    assertNull(countPerformanceCores(List(8) { 1024 }))\n    assertNull(countPerformanceCores(listOf(200, 200, 200, 1024)))\n    assertNull(countPerformanceCores(listOf(0, 0, 0, 0)))\n  }\n}\n",
 )
 
 replace_once(

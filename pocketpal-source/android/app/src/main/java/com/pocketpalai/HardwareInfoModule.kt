@@ -20,6 +20,20 @@ import java.net.Inet4Address
 import org.json.JSONArray
 import org.json.JSONObject
 
+
+/**
+ * Count CPU cores strictly above half of the strongest reported capacity.
+ * Equal-to-half efficiency cores must not be included. Return null when the
+ * cluster information is uniform or too small to be a safe default.
+ */
+internal fun countPerformanceCores(capacities: List<Int>): Int? {
+  val strongest = capacities.maxOrNull()?.takeIf { it > 0 } ?: return null
+  val count = capacities.count {
+    it > 0 && it.toLong() * 2L > strongest.toLong()
+  }
+  return count.takeIf { it in 2 until capacities.size }
+}
+
 @ReactModule(name = NativeHardwareInfoSpec.NAME)
 class HardwareInfoModule(reactContext: ReactApplicationContext) :
     NativeHardwareInfoSpec(reactContext) {
@@ -161,11 +175,7 @@ class HardwareInfoModule(reactContext: ReactApplicationContext) :
         }.getOrNull()
       }
       if (coreCount > 2 && cpuCapacities.size == coreCount) {
-        val maxCapacity = cpuCapacities.maxOrNull() ?: 0
-        val performanceCores = cpuCapacities.count {
-          it > 0 && it >= maxCapacity / 2
-        }
-        if (performanceCores in 2 until coreCount) {
+        countPerformanceCores(cpuCapacities)?.let { performanceCores ->
           cpuInfo.putInt("performanceCores", performanceCores)
         }
       }
