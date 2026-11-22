@@ -416,4 +416,28 @@ replace_once(
 ''',
 )
 
-print("Applied 4 targeted PocketPal quality fixes and added regression tests.")
+# 5) Small, non-chat visual polish: soften model borders and make benchmark
+# cards follow the same rounded, theme-aware surface treatment.
+replace_once(
+    "src/screens/ModelsScreen/ModelCard/styles.ts",
+    "      borderColor: theme.colors.outline,\\n",
+    "      borderColor: theme.colors.outlineVariant,\\n",
+)
+replace_once(
+    "src/screens/BenchmarkScreen/styles.ts",
+    """    card: {
+      marginBottom: 16,
+    },
+""",
+    """    card: {
+      marginBottom: 16,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.colors.outlineVariant,
+      backgroundColor: theme.colors.surface,
+    },
+""",
+)
+
+print("Applied 5 targeted PocketPal quality fixes and added regression tests.")
+
