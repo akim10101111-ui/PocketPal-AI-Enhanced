@@ -87,31 +87,13 @@ jobs:
           EOF
           echo "Temporary Firebase metadata generated for $PACKAGE_NAME (CI only; no live Firebase credentials)."
 
-      - name: Run Android unit tests and capture detailed reports
-        id: android-tests
-        continue-on-error: true
+      - name: Run Android unit tests and build production debug APK
         run: |
           cd "$PROJECT_DIR"
           chmod +x ./gradlew
-          set +e
-          ./gradlew --no-daemon --stacktrace --info --max-workers=2 \
+          ./gradlew --no-daemon --stacktrace --build-cache --max-workers=4 \
             -PreactNativeArchitectures=arm64-v8a \
-            testProdDebugUnitTest
-          TEST_STATUS=$?
-          set -e
-          echo "ANDROID_TEST_STATUS=$TEST_STATUS" >> "$GITHUB_ENV"
-          echo "Android unit test exit code: $TEST_STATUS"
-          find app/build/test-results/testProdDebugUnitTest -maxdepth 1 -type f -name '*.xml' -print -exec cat {} \; || true
-          if [ "$TEST_STATUS" -ne 0 ]; then
-            echo "::warning::Some existing Android unit tests failed. APK build will continue; test XML is retained for diagnosis."
-          fi
-
-      - name: Build production debug APK
-        run: |
-          cd "$PROJECT_DIR"
-          ./gradlew --no-daemon --stacktrace --max-workers=2 \
-            -PreactNativeArchitectures=arm64-v8a \
-            assembleProdDebug
+            testProdDebugUnitTest assembleProdDebug
 
       - name: Upload Android unit test reports
         if: always()

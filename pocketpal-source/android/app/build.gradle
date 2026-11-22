@@ -263,7 +263,10 @@ configurations.matching {
 }
 
 // react-native-tcp-socket needs BouncyCastle only for TLS servers; the local API server is plain TCP.
-configurations.matching { it.name.endsWith('RuntimeClasspath') }.configureEach {
+configurations.matching {
+    // Keep BouncyCastle on unit-test classpaths for Robolectric, but exclude it from app runtime APKs.
+    it.name.endsWith('RuntimeClasspath') && !it.name.toLowerCase().contains('test')
+}.configureEach {
     exclude group: 'org.bouncycastle'
 }
 
