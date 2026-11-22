@@ -420,8 +420,8 @@ replace_once(
 # cards follow the same rounded, theme-aware surface treatment.
 replace_once(
     "src/screens/ModelsScreen/ModelCard/styles.ts",
-    "      borderColor: theme.colors.outline,\\n",
-    "      borderColor: theme.colors.outlineVariant,\\n",
+    "      borderColor: theme.colors.outline,\n",
+    "      borderColor: theme.colors.outlineVariant,\n",
 )
 replace_once(
     "src/screens/BenchmarkScreen/styles.ts",
