@@ -620,7 +620,7 @@ export const SidebarContent: React.FC<DrawerContentComponentProps> = observer(
           </Drawer.Section>
         </View>
       ),
-      [l10n, theme, styles, navigateTo, props.navigation],
+      [l10n, theme, styles, navigateTo],
     );
 
     return (
