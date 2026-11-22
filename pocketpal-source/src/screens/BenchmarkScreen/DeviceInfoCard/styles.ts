@@ -9,7 +9,7 @@ export const createStyles = (theme: Theme) =>
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
       borderColor: theme.colors.outlineVariant,
-      borderRadius: 15,
+      borderRadius: 20,
     },
     deviceInfoRow: {
       flexDirection: 'row',
