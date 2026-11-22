@@ -35,13 +35,7 @@ jobs:
 
       - name: Apply project fixes
         run: |
-          cd "$PROJECT_DIR"
-          for PATCH_FILE in "$GITHUB_WORKSPACE"/fixes/*.patch; do
-            [ -f "$PATCH_FILE" ] || continue
-            echo "Checking $PATCH_FILE"
-            git apply --check "$PATCH_FILE"
-            git apply "$PATCH_FILE"
-          done
+          python3 "$GITHUB_WORKSPACE/fixes/apply_quality_fixes.py" "$PROJECT_DIR"
 
       - name: Install dependencies
         run: |
