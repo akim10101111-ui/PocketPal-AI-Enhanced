@@ -1,0 +1,176 @@
+name: PocketPal Android APK
+on:
+  push:
+    branches: [build/android-functional]
+    paths:
+      - pocketpal-functional.patch.gz
+      - pocketpal-ai-improved-v3.zip
+      - .github/workflows/android-apk.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: pocketpal-android-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build-android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      ORG_GRADLE_PROJECT_rnllamaBuildFromSource: 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Extract source and apply functional changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q pocketpal-ai-improved-v3.zip -d .
+          test -d pocketpal-ai-main/android
+          gzip -dc pocketpal-functional.patch.gz | git apply --check --directory=pocketpal-ai-main -
+          gzip -dc pocketpal-functional.patch.gz | git apply --directory=pocketpal-ai-main -
+      - name: Free build space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android/sdk/ndk-bundle
+          df -h /
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.21.0'
+          cache: yarn
+          cache-dependency-path: pocketpal-ai-main/yarn.lock
+      - name: Install Yarn
+        run: npm install --global yarn@1.22.22
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: gradle
+      - name: Install dependencies
+        working-directory: pocketpal-ai-main
+        run: yarn install --frozen-lockfile
+      - name: Restore enriched Markdown assets
+        working-directory: pocketpal-ai-main
+        run: INIT_CWD="$GITHUB_WORKSPACE/pocketpal-ai-main" node node_modules/react-native-enriched-markdown/postinstall.mjs
+      - name: Validate translations and fonts
+        working-directory: pocketpal-ai-main
+        run: |
+          node scripts/validate-l10n.js
+          node scripts/verify-fonts.js
+      - name: ESLint
+        working-directory: pocketpal-ai-main
+        shell: bash
+        run: set -o pipefail; yarn lint 2>&1 | tee lint.log
+      - name: TypeScript
+        working-directory: pocketpal-ai-main
+        shell: bash
+        run: set -o pipefail; yarn typecheck 2>&1 | tee typecheck.log
+      - name: Unit tests
+        working-directory: pocketpal-ai-main
+        shell: bash
+        run: set -o pipefail; yarn test --runInBand --coverage 2>&1 | tee jest.log
+      - name: Derive native variants
+        working-directory: pocketpal-ai-main
+        shell: bash
+        run: |
+          set -euo pipefail
+          VARIANTS=$(node scripts/verify-android-payload.js --print-variants)
+          echo "ORG_GRADLE_PROJECT_rnllamaVariants=$VARIANTS" >> "$GITHUB_ENV"
+      - name: Cache llama.rn native build
+        uses: actions/cache@v4
+        with:
+          path: pocketpal-ai-main/node_modules/llama.rn/android/.cxx
+          key: ${{ runner.os }}-cxx-${{ hashFiles('pocketpal-ai-main/yarn.lock', 'pocketpal-ai-main/patches/**', 'pocketpal-ai-main/scripts/android-payload-manifest.json') }}
+      - name: Set up Hexagon SDK
+        uses: ./pocketpal-ai-main/.github/actions/setup-hexagon-sdk
+      - name: Set up ccache
+        uses: ./pocketpal-ai-main/.github/actions/setup-ccache
+      - name: Create CI-only Google services config
+        working-directory: pocketpal-ai-main
+        shell: bash
+        run: |
+          mkdir -p android/app
+          cat > android/app/google-services.json <<'JSON'
+          {
+            "project_info": {"project_number":"000000000000","project_id":"dummy-project-for-ci","storage_bucket":"dummy-project-for-ci.appspot.com"},
+            "client": [{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000","android_client_info":{"package_name":"com.pocketpalai"}},"api_key":[{"current_key":"dummy-api-key-for-ci-builds"}]}]
+          }
+          JSON
+          cat > .env <<'ENV'
+          FIREBASE_FUNCTIONS_URL=https://dummy-firebase-url.com
+          SUPABASE_URL=https://dummy-supabase-url.supabase.co
+          SUPABASE_ANON_KEY=dummy-anon-key-for-ci-builds
+          PALSHUB_API_BASE_URL=https://dummy-palshub-api.com
+          APP_URL=pocketpal://app
+          ENABLE_PALSHUB_INTEGRATION=true
+          ENABLE_AUTHENTICATION=true
+          ENABLE_OFFLINE_MODE=true
+          GOOGLE_IOS_CLIENT_ID=dummy-ios-client-id.apps.googleusercontent.com
+          GOOGLE_WEB_CLIENT_ID=dummy-web-client-id.apps.googleusercontent.com
+          ENV
+      - name: Create temporary CI signing key
+        working-directory: pocketpal-ai-main/android/app
+        run: |
+          keytool -genkeypair -v -storetype PKCS12 -keystore pocketpal-release-key.keystore -alias pocketpal_key_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass ci-only-password -keypass ci-only-password -dname 'CN=PocketPal CI, OU=CI, O=PocketPal, L=CI, S=CI, C=US'
+      - name: Build production APK
+        working-directory: pocketpal-ai-main/android
+        env:
+          APP_RELEASE_STORE_PASSWORD: ci-only-password
+          APP_RELEASE_KEY_PASSWORD: ci-only-password
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$ORG_GRADLE_PROJECT_rnllamaBuildFromSource" = 'true'
+          ./gradlew --no-daemon --stacktrace assembleProdRelease 2>&1 | tee android-build.log
+      - name: Verify native payload
+        working-directory: pocketpal-ai-main
+        run: node scripts/verify-android-payload.js --apk android/app/build/outputs/apk/prod/release/app-prod-release.apk --report payload-report.txt
+      - name: Verify APK signature, package and checksum
+        working-directory: pocketpal-ai-main
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/prod/release/app-prod-release.apk
+          test -s "$APK"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n1)
+          "$BUILD_TOOLS/apksigner" verify --verbose "$APK"
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | grep -F "package: name='com.pocketpalai'"
+          sha256sum "$APK" | tee apk-sha256.txt
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocketpal-android-apk-${{ github.run_number }}
+          path: |
+            pocketpal-ai-main/android/app/build/outputs/apk/prod/release/app-prod-release.apk
+            pocketpal-ai-main/apk-sha256.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocketpal-android-build-diagnostics-${{ github.run_number }}
+          path: |
+            pocketpal-ai-main/android/android-build.log
+            pocketpal-ai-main/android/app/build/reports/**
+            pocketpal-ai-main/android/build/reports/**
+            pocketpal-ai-main/coverage/**
+            pocketpal-ai-main/lint.log
+            pocketpal-ai-main/typecheck.log
+            pocketpal-ai-main/jest.log
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Publish test APK release
+        if: success() && github.ref == 'refs/heads/build/android-functional'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pocketpal-android-ci-${{ github.run_number }}
+          name: 'PocketPal Android test APK #${{ github.run_number }}'
+          body: |
+            Built from PocketPal v1.24.0 source with the selected functional fixes.
+            This uses a temporary CI signing key, not a permanent store signing key. An existing installation signed with another key may need to be removed before installing this test APK.
+          prerelease: true
+          files: pocketpal-ai-main/android/app/build/outputs/apk/prod/release/app-prod-release.apk
