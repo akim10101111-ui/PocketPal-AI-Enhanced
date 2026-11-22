@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'pocketpal-ai-improved-v3.zip'
+      - 'pocketpal-source/**'
       - '.github/workflows/android-apk.yml'
 
 permissions:
@@ -13,25 +13,22 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract bundled project
+      - name: Locate committed source tree
         run: |
-          unzip -q pocketpal-ai-improved-v3.zip -d extracted
-          GRADLEW="$(find extracted -type f -name gradlew -print -quit)"
-          if [ -z "$GRADLEW" ]; then
-            echo "::error::No gradlew found inside bundled ZIP"
-            find extracted -maxdepth 4 -type f | head -200
+          ROOT_DIR="$GITHUB_WORKSPACE/pocketpal-source"
+          PROJECT_DIR="$ROOT_DIR/android"
+          if [ ! -f "$ROOT_DIR/package.json" ] || [ ! -f "$PROJECT_DIR/gradlew" ]; then
+            echo "::error::Committed PocketPal source tree is incomplete"
             exit 1
           fi
-          PROJECT_DIR="$(dirname "$GRADLEW")"
-          ROOT_DIR="$(dirname "$PROJECT_DIR")"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "ROOT_DIR=$ROOT_DIR" >> "$GITHUB_ENV"
-          echo "Detected Android project at: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Building committed source from $ROOT_DIR"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -39,73 +36,91 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+          cache-dependency-path: pocketpal-source/android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '22.21.0'
+          cache: yarn
+          cache-dependency-path: pocketpal-source/yarn.lock
 
-      - name: Install JS dependencies (if needed)
+      - name: Install JavaScript dependencies
         run: |
           cd "$ROOT_DIR"
-          if [ -f package.json ]; then
-            corepack enable
-            if grep -q '"packageManager": *"yarn@' package.json; then
-              corepack prepare "$(node -p "require('./package.json').packageManager")" --activate
-            else
-              npm install --global yarn
-            fi
-            if [ -f yarn.lock ]; then
-              yarn install --frozen-lockfile
-            elif [ -f package-lock.json ]; then
-              npm ci
-            else
-              yarn install
-            fi
-          fi
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+          yarn install --frozen-lockfile
 
       - name: Create temporary Firebase config for CI build
         run: |
           APP_GRADLE="$PROJECT_DIR/app/build.gradle"
-          PACKAGE_NAME="$(grep -E '^[[:space:]]*applicationId[[:space:]]+' "$APP_GRADLE" | head -1 | sed -E 's/^[[:space:]]*applicationId[[:space:]]+["]?([^" ]+).*/\\1/')"
+          PACKAGE_NAME="$(sed -n -E 's/^[[:space:]]*applicationId[[:space:]]+"([^"]+)".*/\1/p' "$APP_GRADLE" | head -n 1)"
           if [ -z "$PACKAGE_NAME" ]; then
-            PACKAGE_NAME="$(grep -E '^[[:space:]]*namespace[[:space:]]+' "$APP_GRADLE" | head -1 | sed -E 's/^[[:space:]]*namespace[[:space:]]+["]?([^" ]+).*/\\1/')"
-          fi
-          if [ -z "$PACKAGE_NAME" ]; then
-            echo "::error::Could not determine Android application package"
+            echo "::error::Could not determine the production Android application ID"
             exit 1
           fi
           cat > "$PROJECT_DIR/app/google-services.json" <<EOF
           {
             "project_info": {
               "project_number": "123456789012",
-              "project_id": "ci-placeholder",
-              "storage_bucket": "ci-placeholder.appspot.com"
+              "project_id": "pocketpal-ci-placeholder",
+              "storage_bucket": "pocketpal-ci-placeholder.appspot.com"
             },
             "client": [
               {
                 "client_info": {
                   "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890",
-                  "android_client_info": { "package_name": "$PACKAGE_NAME" }
+                  "android_client_info": {
+                    "package_name": "$PACKAGE_NAME"
+                  }
                 },
-                "api_key": [ { "current_key": "CI_PLACEHOLDER_API_KEY" } ]
+                "api_key": [
+                  {
+                    "current_key": "AIzaSyCIPocketPalCiBuildPlaceholder000000000"
+                  }
+                ]
               }
             ],
             "configuration_version": "1"
           }
           EOF
-          echo "Generated temporary placeholder Firebase config for $PACKAGE_NAME (CI only)."
+          echo "Temporary Firebase metadata generated for $PACKAGE_NAME (CI only; no live Firebase credentials)."
 
-      - name: Build debug APK
+      - name: Run Android unit tests and build production debug APK
         run: |
           cd "$PROJECT_DIR"
           chmod +x ./gradlew
-          ./gradlew --no-daemon assembleDebug
+          ./gradlew --no-daemon --stacktrace --max-workers=2 \
+            -PreactNativeArchitectures=arm64-v8a \
+            testProdDebugUnitTest assembleProdDebug
 
-      - name: Upload APK
+      - name: Verify APK and signature
+        run: |
+          APK_DIR="$PROJECT_DIR/app/build/outputs/apk/prod/debug"
+          APK_PATH="$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::prodDebug build completed without producing an APK"
+            find "$PROJECT_DIR/app/build/outputs/apk" -maxdepth 5 -type f -print || true
+            exit 1
+          fi
+
+          ANDROID_SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          APKSIGNER="$(command -v apksigner || find "$ANDROID_SDK/build-tools" -type f -name apksigner -print 2>/dev/null | sort -V | tail -n 1)"
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::Android apksigner was not found; cannot verify APK signature"
+            exit 1
+          fi
+
+          "$APKSIGNER" verify --verbose --print-certs "$APK_PATH"
+          sha256sum "$APK_PATH"
+          ls -lh "$APK_PATH"
+          echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
+
+      - name: Upload verified APK
         uses: actions/upload-artifact@v4
         with:
-          name: PocketPal-debug-apk
-          path: ${{ env.PROJECT_DIR }}/**/build/outputs/apk/debug/*.apk
+          name: PocketPal-prodDebug-arm64
+          path: ${{ env.APK_PATH }}
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
