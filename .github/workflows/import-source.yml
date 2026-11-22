@@ -1,0 +1,53 @@
+name: Import PocketPal source into repository
+
+on:
+  push:
+    paths:
+      - 'pocketpal-ai-improved-v3.zip'
+      - '.github/workflows/import-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract and apply validated fixes
+        run: |
+          if [ -d pocketpal-source/android ]; then
+            echo "PocketPal source already exists; no import needed."
+            exit 0
+          fi
+          unzip -q pocketpal-ai-improved-v3.zip -d extracted
+          GRADLEW="$(find extracted -type f -name gradlew -print -quit)"
+          if [ -z "$GRADLEW" ]; then
+            echo "::error::No Android Gradle wrapper found in the archive"
+            exit 1
+          fi
+          ANDROID_DIR="$(dirname "$GRADLEW")"
+          SOURCE_ROOT="$(dirname "$ANDROID_DIR")"
+          if [ ! -f "$SOURCE_ROOT/package.json" ]; then
+            echo "::error::The extracted source root has no package.json: $SOURCE_ROOT"
+            exit 1
+          fi
+          python3 fixes/apply_quality_fixes.py "$SOURCE_ROOT"
+          mv "$SOURCE_ROOT" pocketpal-source
+          rm -rf extracted
+
+      - name: Commit imported source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f pocketpal-source
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+            exit 0
+          fi
+          git commit -m "Import PocketPal source with quality fixes"
+          git push origin HEAD:main
