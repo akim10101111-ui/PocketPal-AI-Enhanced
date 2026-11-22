@@ -7,7 +7,7 @@ export const createStyles = (theme: Theme) =>
       backgroundColor: theme.colors.surface,
       borderRadius: 20,
       borderWidth: 1,
-      borderColor: theme.colors.surfaceVariant,
+      borderColor: theme.colors.outlineVariant,
     },
     resultHeader: {
       flexDirection: 'row',
