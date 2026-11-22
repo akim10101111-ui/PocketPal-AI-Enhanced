@@ -5,6 +5,8 @@
 
 import {Platform} from 'react-native';
 import {getBackendDevicesInfo, NativeBackendDeviceInfo} from 'llama.rn';
+import NativeHardwareInfo from '../specs/NativeHardwareInfo';
+import {isHexagonChipsetSupported} from './hexagonCompatibility';
 
 /**
  * Device option for UI selection
@@ -66,8 +68,15 @@ export async function resolveDeviceSelection(selection: {
     return snapshot;
   }
 
-  const device = selectHexagonDevice(await getAvailableDevices());
-  return device
+  const devices = await getAvailableDevices();
+  const device = selectHexagonDevice(devices);
+  let chipset: string | undefined;
+  try {
+    chipset = (await NativeHardwareInfo.getChipset?.()) || undefined;
+  } catch {
+    // Unknown chipset: do not risk enabling an HTP binary we cannot verify.
+  }
+  return device && isHexagonChipsetSupported(chipset)
     ? {...snapshot, devices: [device.deviceName]}
     : {devices: ['CPU'], n_gpu_layers: 0};
 }
@@ -127,8 +136,16 @@ export async function getDeviceOptions(): Promise<DeviceOption[]> {
 
   // Android: Build options based on available devices
   const devices = await getAvailableDevices();
-  const hexagonDevice = selectHexagonDevice(devices);
   const gpuDev = devices.find(d => d.type === 'gpu');
+  let chipset: string | undefined;
+  try {
+    chipset = (await NativeHardwareInfo.getChipset?.()) || undefined;
+  } catch {
+    // If chipset identification fails, leave the safe CPU/OpenCL options only.
+  }
+  const hexagonDevice = isHexagonChipsetSupported(chipset)
+    ? selectHexagonDevice(devices)
+    : undefined;
 
   // Option 1: CPU (always available, recommended for reliability)
   // CPU supports all flash attention types
