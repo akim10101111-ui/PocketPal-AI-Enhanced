@@ -1,0 +1,183 @@
+diff --git a/android/app/src/main/java/com/pocketpalai/HardwareInfoModule.kt b/android/app/src/main/java/com/pocketpalai/HardwareInfoModule.kt
+index 0000000..0000000 100644
+--- a/android/app/src/main/java/com/pocketpalai/HardwareInfoModule.kt
++++ b/android/app/src/main/java/com/pocketpalai/HardwareInfoModule.kt
+@@ -147,7 +147,24 @@
+   override fun getCPUInfo(promise: Promise) {
+     try {
+       val cpuInfo = Arguments.createMap()
+-      cpuInfo.putInt("cores", Runtime.getRuntime().availableProcessors())
++      val coreCount = Runtime.getRuntime().availableProcessors()
++      cpuInfo.putInt("cores", coreCount)
++
++      // Some Android kernels expose per-core capacity (the scheduler's
++      // relative CPU performance scale). Use it only when every visible core
++      // has a valid value; partial data can otherwise undercount big cores.
++      val cpuCapacities = (0 until coreCount).mapNotNull { cpu ->
++        runCatching {
++          File("/sys/devices/system/cpu/cpu$cpu/cpu_capacity")
++            .readText()
++            .trim()
++            .toIntOrNull()
++        }.getOrNull()
++      }
++      if (coreCount > 2 && cpuCapacities.size == coreCount) {
++        val maxCapacity = cpuCapacities.maxOrNull() ?: 0
++        val performanceCores = cpuCapacities.count {
++          it > 0 && it >= maxCapacity / 2
++        }
++        if (performanceCores in 2 until coreCount) {
++          cpuInfo.putInt("performanceCores", performanceCores)
++        }
++      }
+ 
+       val processors = Arguments.createArray()
+       val features = mutableSetOf<String>()
+diff --git a/src/specs/NativeHardwareInfo.ts b/src/specs/NativeHardwareInfo.ts
+index 0000000..0000000 100644
+--- a/src/specs/NativeHardwareInfo.ts
++++ b/src/specs/NativeHardwareInfo.ts
+@@ -9,6 +9,7 @@
+ export interface CPUInfo {
+   cores: number;
++  performanceCores?: number;
+   processors?: CPUProcessor[];
+   features?: string[];
+   hasFp16?: boolean;
+diff --git a/src/utils/deviceCapabilities.ts b/src/utils/deviceCapabilities.ts
+index 0000000..0000000 100644
+--- a/src/utils/deviceCapabilities.ts
++++ b/src/utils/deviceCapabilities.ts
+@@ -39,6 +39,7 @@
+   }>;
+   socModel?: string;
++  performanceCores?: number;
+   features?: string[];
+   hasFp16?: boolean;
+   hasDotProd?: boolean;
+@@ -89,6 +90,7 @@
+       })),
+       socModel: info.socModel,
++      performanceCores: info.performanceCores,
+       features: info.features,
+       hasFp16: info.hasFp16,
+       hasDotProd: info.hasDotProd,
+@@ -113,11 +115,26 @@
+-/**
+- * Get recommended thread count based on CPU cores
+- * Uses 80% of cores for devices with more than 4 cores, otherwise uses all cores
+- * @returns Promise<number> Recommended thread count
+- */
+-export async function getRecommendedThreadCount(): Promise<number> {
+-  const cores = await getCpuCoreCount();
++/**
++ * Select a default thread count without putting inference work on efficiency
++ * cores when Android exposes reliable per-core capacity data. Existing user
++ * settings are not changed; this is used only for a fresh install.
++ */
++export function recommendedThreadCountForCpu(
++  cpuInfo: Pick<CpuInfo, 'cores' | 'performanceCores'> | null,
++): number {
++  const cores = cpuInfo?.cores || 4;
++  const performanceCores = cpuInfo?.performanceCores;
++  if (
++    Number.isInteger(performanceCores) &&
++    performanceCores !== undefined &&
++    performanceCores >= 2 &&
++    performanceCores < cores
++  ) {
++    return performanceCores;
++  }
+   return cores <= 4 ? cores : Math.floor(cores * 0.8);
+ }
++
++export async function getRecommendedThreadCount(): Promise<number> {
++  return recommendedThreadCountForCpu(await getCpuInfo());
++}
+diff --git a/src/screens/BenchmarkScreen/BenchmarkScreen.tsx b/src/screens/BenchmarkScreen/BenchmarkScreen.tsx
+index 0000000..0000000 100644
+--- a/src/screens/BenchmarkScreen/BenchmarkScreen.tsx
++++ b/src/screens/BenchmarkScreen/BenchmarkScreen.tsx
+@@ -168,6 +168,16 @@
+         selectedConfig.pl,
+         selectedConfig.nr,
+       );
++      // Native benchmark failures can resolve with an empty object instead
++      // of throwing. Never persist an empty/invalid measurement as a result.
++      if (
++        !Number.isFinite(ppAvg) ||
++        ppAvg <= 0 ||
++        !Number.isFinite(tgAvg) ||
++        tgAvg <= 0
++      ) {
++        throw new Error('Benchmark returned invalid throughput metrics');
++      }
+       const modelDesc = modelStore.context.model.desc;
+       const modelSize = modelStore.context.model.size;
+       const modelNParams = modelStore.context.model.nParams;
+diff --git a/src/utils/__tests__/deviceCapabilities.test.ts b/src/utils/__tests__/deviceCapabilities.test.ts
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/src/utils/__tests__/deviceCapabilities.test.ts
+@@ -0,0 +1,28 @@
++import {recommendedThreadCountForCpu} from '../deviceCapabilities';
++
++describe('recommendedThreadCountForCpu', () => {
++  it('uses performance cores when Android reports a heterogeneous cluster', () => {
++    expect(
++      recommendedThreadCountForCpu({cores: 8, performanceCores: 4}),
++    ).toBe(4);
++  });
++
++  it('keeps the existing conservative fallback when capacity data is absent', () => {
++    expect(recommendedThreadCountForCpu({cores: 8})).toBe(6);
++    expect(recommendedThreadCountForCpu(null)).toBe(4);
++  });
++
++  it('uses all cores on small CPUs', () => {
++    expect(recommendedThreadCountForCpu({cores: 4})).toBe(4);
++  });
++
++  it('ignores invalid or implausible performance-core counts', () => {
++    expect(
++      recommendedThreadCountForCpu({cores: 8, performanceCores: 1}),
++    ).toBe(6);
++    expect(
++      recommendedThreadCountForCpu({cores: 8, performanceCores: 12}),
++    ).toBe(6);
++  });
++});
+diff --git a/src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx b/src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx
+index 0000000..0000000 100644
+--- a/src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx
++++ b/src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx
+@@ -177,6 +177,40 @@
+       });
+     });
+ 
++    it.each([
++      {speedPp: 0, speedTg: 10},
++      {speedPp: 100, speedTg: 0},
++      {speedPp: Number.NaN, speedTg: 10},
++      {speedPp: 100, speedTg: Number.POSITIVE_INFINITY},
++      {},
++    ])('does not save an invalid benchmark result: %o', async metrics => {
++      modelStore.activeModelId = modelStore.models[0].id;
++      const context = new LlamaContext(mockLlamaContextParams);
++      (context.bench as jest.Mock).mockResolvedValue(metrics);
++      modelStore.context = context;
++
++      const {getByTestId} = render(<BenchmarkScreen />);
++      fireEvent.press(getByTestId('start-test-button'));
++
++      await waitFor(() => {
++        expect(getByTestId('benchmark-run-error')).toHaveTextContent(
++          l10n.en.benchmark.messages.testFailed,
++        );
++      });
++      expect(benchmarkStore.addResult).not.toHaveBeenCalled();
++    });
++
+     describe('when bench rejects', () => {
+       let consoleError: jest.SpyInstance;
