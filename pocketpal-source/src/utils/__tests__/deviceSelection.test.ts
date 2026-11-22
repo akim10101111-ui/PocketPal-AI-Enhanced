@@ -1,5 +1,11 @@
+import NativeHardwareInfo from '../../specs/NativeHardwareInfo';
 import {Platform} from 'react-native';
 import {getBackendDevicesInfo} from 'llama.rn';
+
+jest.mock('../../specs/NativeHardwareInfo', () => ({
+  __esModule: true,
+  default: {getChipset: jest.fn()},
+}));
 
 import {getDeviceOptions, resolveDeviceSelection} from '../deviceSelection';
 
@@ -17,6 +23,7 @@ describe('Hexagon device selection', () => {
   beforeEach(() => {
     Platform.OS = 'android';
     discover.mockReset().mockResolvedValue([]);
+    (NativeHardwareInfo.getChipset as jest.Mock).mockResolvedValue('SM8550');
   });
 
   afterEach(() => {
@@ -81,6 +88,31 @@ describe('Hexagon device selection', () => {
       expect(discover).not.toHaveBeenCalled();
     },
   );
+
+
+  it('does not expose Hexagon v69 on Snapdragon 8 Gen 1', async () => {
+    discover.mockResolvedValue([device('HTP0')]);
+    (NativeHardwareInfo.getChipset as jest.Mock).mockResolvedValue('SM8450');
+
+    expect((await getDeviceOptions()).map(option => option.id)).toEqual([
+      'cpu',
+    ]);
+    expect(
+      await resolveDeviceSelection({devices: ['HTP0'], n_gpu_layers: 99}),
+    ).toEqual({devices: ['CPU'], n_gpu_layers: 0});
+  });
+
+  it('does not expose HTP when the chipset is unknown', async () => {
+    discover.mockResolvedValue([device('HTP0')]);
+    (NativeHardwareInfo.getChipset as jest.Mock).mockResolvedValue(null);
+
+    expect((await getDeviceOptions()).map(option => option.id)).toEqual([
+      'cpu',
+    ]);
+    expect(
+      await resolveDeviceSelection({devices: ['HTP0'], n_gpu_layers: 99}),
+    ).toEqual({devices: ['CPU'], n_gpu_layers: 0});
+  });
 
   it('preserves an OpenCL selection without discovery', async () => {
     const selection = {devices: ['Adreno (TM) 840'], n_gpu_layers: 23};
