@@ -130,7 +130,7 @@ jobs:
         run: |
           cd "$PROJECT_DIR"
           chmod +x ./gradlew
-          ./gradlew --no-daemon --stacktrace --build-cache --console=plain --max-workers=4 \
+          ./gradlew --no-daemon --stacktrace --build-cache --parallel --console=plain --max-workers=4 \
             -PreactNativeArchitectures=arm64-v8a \
             testProdDebugUnitTest assembleProdDebug
 
@@ -161,6 +161,11 @@ jobs:
           fi
 
           "$APKSIGNER" verify --verbose --print-certs "$APK_PATH"
+          if unzip -Z1 "$APK_PATH" | grep -q '^lib/x86_64/'; then
+            echo "::error::Unexpected x86_64 native libraries in ARM64-only APK"
+            exit 1
+          fi
+          echo "Verified ARM64-only native payload"
           sha256sum "$APK_PATH"
           ls -lh "$APK_PATH"
           echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"

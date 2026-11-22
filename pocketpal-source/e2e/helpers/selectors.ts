@@ -149,18 +149,14 @@ export const Selectors = {
   // behind the drawer (a model card's "Settings" gear), whose tap lands on
   // whichever drawer row covers it.
   drawer: {
+    get container(): string {
+      return byTestId('sidebar-content');
+    },
     get chatTab(): string {
       return drawerItem('chat', 'Chat');
     },
     get modelsTab(): string {
       return drawerItem('models', 'Models');
-    },
-    // Pals tab doubles as the drawer-open indicator (DrawerPage.isOpen /
-    // waitForOpen / waitForClose), so it must survive a language switch.
-    // Match the app's stable testID (SidebarContent drawer-item-pals) instead
-    // of the English label.
-    get palsTab(): string {
-      return byTestId('drawer-item-pals');
     },
     get benchmarkTab(): string {
       return drawerItem('benchmark', 'Benchmark');

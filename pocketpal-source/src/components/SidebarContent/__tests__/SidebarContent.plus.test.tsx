@@ -35,6 +35,7 @@ describe('SidebarContent navigation', () => {
       <TestNavigator />,
     );
 
+    expect(getByTestId('sidebar-content')).toBeTruthy();
     expect(getByTestId('drawer-item-chat')).toBeTruthy();
     expect(getByTestId('drawer-item-models')).toBeTruthy();
     expect(getByTestId('drawer-item-settings')).toBeTruthy();

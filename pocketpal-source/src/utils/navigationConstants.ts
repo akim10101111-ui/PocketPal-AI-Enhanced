@@ -3,7 +3,6 @@ export const ROUTES = {
   // Main app routes
   CHAT: 'Chat',
   MODELS: 'Models',
-  PALS: 'Pals (experimental)',
   BENCHMARK: 'Benchmark',
   SETTINGS: 'Settings',
   APP_INFO: 'App Info',
@@ -17,9 +16,6 @@ export const ROUTES = {
   // matcher, and autostart parser live in src/__automation__/benchmarkRoute
   // so the automation protocol stays inside the __automation__ boundary.
   BENCHMARK_RUNNER: 'BenchmarkRunner',
-
-  // E2E-only screen behind Plus, reached by pocketpal://e2e/plus-feature.
-  PLUS_TEST_FEATURE: 'PlusTestFeature',
 
   // Onboarding stack routes (mounted via OnboardingStack when
   // uiStore.hasCompletedOnboarding is false; see App.tsx SwitchPoint).

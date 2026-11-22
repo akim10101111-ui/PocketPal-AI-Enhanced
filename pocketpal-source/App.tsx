@@ -38,15 +38,11 @@ import {
   TTSSetupSheet,
   DownloadOverlay,
   HubRunSheetHost,
-  PlusA11yScope,
-  PlusHost,
 } from './src/components';
 import {
   AutomationBridge,
   BenchmarkRunnerScreen,
-  PlusTestFeatureScreen,
   fakeStore,
-  plusShipOverride,
 } from './src/__automation__';
 import {
   ChatScreen,
@@ -65,7 +61,6 @@ const isDebugMode = __DEV__;
 
 if (__E2E__) {
   fakeStore.restore();
-  plusShipOverride.restore();
 }
 
 const Drawer = createDrawerNavigator();
@@ -135,8 +130,7 @@ const App = observer(() => {
             <L10nContext.Provider value={currentL10n}>
               <NavigationContainer>
                 <DeepLinkHandler />
-                <PlusA11yScope>
-                  <BottomSheetModalProvider>
+                <BottomSheetModalProvider>
                     <SwitchPoint
                       drawer={
                         <Drawer.Navigator
@@ -229,28 +223,13 @@ const App = observer(() => {
                               }}
                             />
                           )}
-                          {__E2E__ && (
-                            <Drawer.Screen
-                              name={ROUTES.PLUS_TEST_FEATURE}
-                              component={gestureHandlerRootHOC(
-                                PlusTestFeatureScreen,
-                              )}
-                              options={{
-                                headerStyle: styles.headerWithoutDivider,
-                                title: 'Plus Test Feature',
-                                drawerItemStyle: {display: 'none'},
-                              }}
-                            />
-                          )}
                         </Drawer.Navigator>
                       }
                     />
                     <TTSSetupSheet />
                     <DownloadOverlay />
                     <HubRunSheetHost />
-                  </BottomSheetModalProvider>
-                </PlusA11yScope>
-                <PlusHost />
+                </BottomSheetModalProvider>
               </NavigationContainer>
             </L10nContext.Provider>
           </PaperProvider>

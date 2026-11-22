@@ -624,7 +624,9 @@ export const SidebarContent: React.FC<DrawerContentComponentProps> = observer(
     );
 
     return (
-      <GestureHandlerRootView style={styles.sidebarContainer}>
+      <GestureHandlerRootView
+        testID="sidebar-content"
+        style={styles.sidebarContainer}>
         <View
           style={[
             styles.contentWrapper,

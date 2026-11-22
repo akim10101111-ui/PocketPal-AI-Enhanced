@@ -16,7 +16,6 @@ import {
   isBenchmarkRunnerUrl,
   parseBenchmarkAutostart,
 } from '../__automation__/benchmarkRoute';
-import {isPlusFeatureUrl} from '../__automation__/plusFeatureRoute';
 
 /**
  * Hook for handling deep link navigation
@@ -117,7 +116,7 @@ export const useDeepLinking = () => {
     [handleChatDeepLink, handleHubRunLink, navigation],
   );
 
-  // E2E-only routing for the benchmark runner and the Plus test feature.
+  // E2E-only routing for the benchmark runner.
   // Two paths:
   //   1. Cold launch — Linking.getInitialURL() reads the launching intent's
   //      data URI; no MainActivity onNewIntent override needed.
@@ -143,8 +142,6 @@ export const useDeepLinking = () => {
         (navigation as any).navigate(ROUTES.BENCHMARK_RUNNER, {
           autostart: parseBenchmarkAutostart(url),
         });
-      } else if (isPlusFeatureUrl(url)) {
-        (navigation as any).navigate(ROUTES.PLUS_TEST_FEATURE);
       }
     };
     Linking.getInitialURL()

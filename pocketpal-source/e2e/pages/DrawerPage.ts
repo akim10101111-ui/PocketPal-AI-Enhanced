@@ -6,7 +6,7 @@
  */
 
 import {BasePage, ChainableElement} from './BasePage';
-import {Selectors, byPartialText, byText} from '../helpers/selectors';
+import {Selectors, byPartialText} from '../helpers/selectors';
 
 declare const browser: WebdriverIO.Browser;
 
@@ -26,27 +26,24 @@ export class DrawerPage extends BasePage {
   }
 
   /**
-   * Check if drawer is open (by checking if Pals tab is visible)
-   * We use Pals because it's unique to the drawer and not a screen title
+   * Check whether the drawer root is mounted.
    */
   async isOpen(): Promise<boolean> {
-    return this.isElementDisplayed(Selectors.drawer.palsTab, 3000);
+    return this.isElementDisplayed(Selectors.drawer.container, 3000);
   }
 
   /**
-   * Wait for drawer to be fully open
-   * We use Pals tab because it's unique to the drawer (not a screen title)
+   * Wait for the drawer root to be mounted.
    */
   async waitForOpen(timeout = 10000): Promise<void> {
-    await this.waitForElement(Selectors.drawer.palsTab, timeout);
+    await this.waitForElement(Selectors.drawer.container, timeout);
   }
 
   /**
-   * Wait for drawer to close
-   * We use Pals tab because it's unique to the drawer and won't appear elsewhere
+   * Wait for the drawer root to be removed.
    */
   async waitForClose(timeout = 5000): Promise<void> {
-    await this.waitForElementToDisappear(Selectors.drawer.palsTab, timeout);
+    await this.waitForElementToDisappear(Selectors.drawer.container, timeout);
   }
 
   /**
@@ -77,22 +74,6 @@ export class DrawerPage extends BasePage {
   async tapSession(titleFragment: string): Promise<void> {
     await this.waitForOpen();
     await this.tap(byPartialText(titleFragment));
-    await browser.pause(300);
-    await this.waitForClose();
-  }
-
-  /**
-   * Navigate to Pals screen
-   *
-   * Tap the visible label, not Selectors.drawer.palsTab. That selector is the
-   * testID (drawer-item-pals) used as the open/close indicator so it survives a
-   * language switch, but a Paper Drawer.Item does not reliably respond to a
-   * testID tap on iOS (see the selectors.ts drawer comment) — tapping the label
-   * matches the other tabs and works on both platforms.
-   */
-  async navigateToPals(): Promise<void> {
-    await this.waitForOpen();
-    await this.tap(byText('Pals'));
     await browser.pause(300);
     await this.waitForClose();
   }
