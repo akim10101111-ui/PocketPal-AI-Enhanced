@@ -181,3 +181,185 @@ index 0000000..0000000 100644
 +
      describe('when bench rejects', () => {
        let consoleError: jest.SpyInstance;
+
+diff --git a/src/hooks/useMemoryCheck.ts b/src/hooks/useMemoryCheck.ts
+index 0000000..0000000 100644
+--- a/src/hooks/useMemoryCheck.ts
++++ b/src/hooks/useMemoryCheck.ts
+@@ -14,6 +14,15 @@
+ import {modelStore} from '../store';
+ import {MemoryFitStatus} from '../utils/memoryDisplay';
+ 
++const getFallbackMemoryCeiling = (totalMemory: number): number => {
++  if (!Number.isFinite(totalMemory) || totalMemory <= 0) {
++    return 0;
++  }
++  // Keep this identical for the load guard and the model-card warning.
++  return Math.max(Math.min(totalMemory * 0.6, totalMemory - 1.2 * 1e9), 0);
++};
++
+ /**
+  * Check if there's enough memory to load a model.
+@@ -49,11 +58,7 @@
+   } else {
+     // Cold start: no calibration data yet, use conservative fallback
+     const totalMemory = await DeviceInfo.getTotalMemory();
+-    // Use heuristic: min(60% of RAM, RAM - 1.2GB)
+-    ceiling = Math.max(
+-      Math.min(totalMemory * 0.6, totalMemory - 1.2 * 1e9),
+-      0, // Ensure non-negative
+-    );
++    ceiling = getFallbackMemoryCeiling(totalMemory);
+   }
+ 
+   const memoryRequirement = getModelMemoryRequirement(
+@@ -91,10 +96,14 @@
+   const totalMemory = await DeviceInfo.getTotalMemory();
+ 
+   // Get learned available ceiling (already includes fallback from ModelStore.initializeStore)
+-  const availableBytes = Math.max(
++  const calibratedAvailableBytes = Math.max(
+     modelStore.largestSuccessfulLoad ?? 0,
+     modelStore.availableMemoryCeiling ?? 0,
+   );
++  // Keep the badge consistent with hasEnoughMemory during first launch or
++  // before ModelStore has finished its memory calibration.
++  const availableBytes =
++    calibratedAvailableBytes > 0
++      ? calibratedAvailableBytes
++      : getFallbackMemoryCeiling(totalMemory);
+ 
+   // Determine status
+   let status: MemoryFitStatus;
+@@ -151,6 +160,7 @@
+   const deviceTier = modelStore.deviceTier;
+ 
+   useEffect(() => {
++    let isCurrent = true;
+     const checkMemory = async () => {
+       // Reset warnings first
+       setMemoryWarning('');
+@@ -169,6 +179,9 @@
+             modelStore.memoryEstimateSettings,
+             draftModel,
+           );
++        if (!isCurrent) {
++          return;
++        }
+ 
+         setFitStatus(status);
+ 
+@@ -205,17 +218,23 @@
+         if (isMultimodal) {
+           const isCapable = await isHighEndDevice();
+-          if (!isCapable) {
++          if (isCurrent && !isCapable) {
+             setMultimodalWarning(l10n.memory.multimodalWarning);
+           }
+         }
+       } catch (error) {
+-        // Clear all warnings when there's an error
+-        setMemoryWarning('');
+-        setShortMemoryWarning('');
+-        setMultimodalWarning('');
+-        setFitStatus('fits');
+-        console.error('Memory check failed:', error);
++        if (isCurrent) {
++          // Do not let a failed/stale check leave an old warning on a new model.
++          setMemoryWarning('');
++          setShortMemoryWarning('');
++          setMultimodalWarning('');
++          setFitStatus('fits');
++          console.error('Memory check failed:', error);
++        }
+       }
+     };
+ 
+     checkMemory();
++    return () => {
++      isCurrent = false;
++    };
+   }, [
+diff --git a/src/hooks/__tests__/useMemoryCheck.test.ts b/src/hooks/__tests__/useMemoryCheck.test.ts
+index 0000000..0000000 100644
+--- a/src/hooks/__tests__/useMemoryCheck.test.ts
++++ b/src/hooks/__tests__/useMemoryCheck.test.ts
+@@ -87,6 +87,34 @@
+     });
+   });
+ 
++  it('uses the same conservative fallback as the load guard before calibration', async () => {
++    runInAction(() => {
++      modelStore.availableMemoryCeiling = undefined;
++      modelStore.largestSuccessfulLoad = undefined;
++    });
++    (DeviceInfo.getTotalMemory as jest.Mock).mockResolvedValue(8 * 1e9);
++
++    const {result, waitForNextUpdate} = renderHook(() =>
++      useMemoryCheck(localModel),
++    );
++    try {
++      await waitForNextUpdate();
++    } catch {
++      // Ignore hook test timeout if the update completed synchronously.
++    }
++
++    // localModel requires 2.4GB; the shared 8GB fallback ceiling is 4.8GB.
++    expect(result.current.fitStatus).toBe('fits');
++    expect(result.current.memoryWarning).toBe('');
++  });
++
+   it('uses maximum of largestSuccessfulLoad and availableMemoryCeiling', async () => {
+     // Set largestSuccessfulLoad higher than availableMemoryCeiling
+     runInAction(() => {
+diff --git a/src/store/ModelStore.ts b/src/store/ModelStore.ts
+index 0000000..0000000 100644
+--- a/src/store/ModelStore.ts
++++ b/src/store/ModelStore.ts
+@@ -883,25 +883,34 @@
+     await this.initializeGpuSettings(); // Should be awaited to ensure GPU settings are applied before initializing context
+ 
+-    // Initialize available memory ceiling at app startup if not set
+-    if (this.availableMemoryCeiling === undefined) {
+-      try {
+-        const availableBytes = await NativeHardwareInfo.getAvailableMemory();
++    // Refresh the memory high-water mark at every launch. A one-time snapshot
++    // can become stale (for example, if the first launch happened under memory
++    // pressure) and keep model recommendations artificially low forever.
++    try {
++      const availableBytes = await NativeHardwareInfo.getAvailableMemory();
++      if (Number.isFinite(availableBytes) && availableBytes > 0) {
+         runInAction(() => {
+-          this.availableMemoryCeiling = availableBytes;
++          this.availableMemoryCeiling = Math.max(
++            this.availableMemoryCeiling ?? 0,
++            availableBytes,
++          );
+         });
+-      } catch (error) {
+-        // Fallback when native call fails
++      }
++    } catch (error) {
++      // Keep a previously learned ceiling if the native probe is unavailable.
++      if (this.availableMemoryCeiling === undefined) {
+         console.warn(
+           '[ModelStore] Native getAvailableMemory failed, using fallback:',
+           error,
+         );
+         const totalMemory = await DeviceInfo.getTotalMemory();
+         // Use conservative heuristic: min(60% of RAM, RAM - 1.2GB)
+         const fallbackCeiling = Math.min(
+           totalMemory * 0.6,
+           totalMemory - 1.2 * 1e9,
+         );
+         runInAction(() => {
+           this.availableMemoryCeiling = Math.max(fallbackCeiling, 0); // Ensure non-negative
+         });
++      } else {
++        console.warn(
++          '[ModelStore] Native getAvailableMemory refresh failed; keeping previous ceiling:',
++          error,
++        );
+       }
+     }
+ 
