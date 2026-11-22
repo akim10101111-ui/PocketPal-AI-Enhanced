@@ -96,7 +96,7 @@ export async function getRecommendedThreadCount(): Promise<number> {
  * not modified; ModelStore uses this only for first-launch defaults.
  */
 export function recommendedThreadCountForCpu(
-  cpuInfo: Pick<CpuInfo, "cores" | "performanceCores"> | null,
+  cpuInfo: Pick<CpuInfo, 'cores' | 'performanceCores'> | null,
 ): number {
   const cores = cpuInfo?.cores || 4;
   const performanceCores = cpuInfo?.performanceCores;
@@ -119,25 +119,25 @@ export async function getRecommendedThreadCount(): Promise<number> {
 
 create_file(
     "src/utils/__tests__/deviceCapabilities.test.ts",
-    '''import {recommendedThreadCountForCpu} from "../deviceCapabilities";
+    '''import {recommendedThreadCountForCpu} from '../deviceCapabilities';
 
-describe("recommendedThreadCountForCpu", () => {
-  it("uses performance cores on heterogeneous Android CPUs", () => {
+describe('recommendedThreadCountForCpu', () => {
+  it('uses performance cores on heterogeneous Android CPUs', () => {
     expect(
       recommendedThreadCountForCpu({cores: 8, performanceCores: 4}),
     ).toBe(4);
   });
 
-  it("keeps the conservative fallback when capacity data is absent", () => {
+  it('keeps the conservative fallback when capacity data is absent', () => {
     expect(recommendedThreadCountForCpu({cores: 8})).toBe(6);
     expect(recommendedThreadCountForCpu(null)).toBe(4);
   });
 
-  it("uses all cores on small CPUs", () => {
+  it('uses all cores on small CPUs', () => {
     expect(recommendedThreadCountForCpu({cores: 4})).toBe(4);
   });
 
-  it("ignores invalid or implausible capacity values", () => {
+  it('ignores invalid or implausible capacity values', () => {
     expect(
       recommendedThreadCountForCpu({cores: 8, performanceCores: 1}),
     ).toBe(6);
@@ -167,7 +167,7 @@ replace_once(
         !Number.isFinite(tgAvg) ||
         tgAvg <= 0
       ) {
-        throw new Error("Benchmark returned invalid throughput metrics");
+        throw new Error('Benchmark returned invalid throughput metrics');
       }
 
       const modelDesc = modelStore.context.model.desc;
