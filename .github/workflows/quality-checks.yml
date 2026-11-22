@@ -52,10 +52,10 @@ jobs:
       - name: Format and lint changed TypeScript files
         run: |
           cd "$PROJECT_DIR"
-          yarn prettier --write src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/useMemoryCheck.ts src/hooks/__tests__/useMemoryCheck.test.ts src/store/ModelStore.ts
-          yarn eslint src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/useMemoryCheck.ts src/hooks/__tests__/useMemoryCheck.test.ts src/store/ModelStore.ts
+          yarn prettier --write src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/useMemoryCheck.ts src/hooks/__tests__/useMemoryCheck.test.ts src/store/ModelStore.ts src/screens/ModelsScreen/ModelCard/styles.ts src/screens/BenchmarkScreen/styles.ts
+          yarn eslint src/utils/deviceCapabilities.ts src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/BenchmarkScreen.tsx src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/useMemoryCheck.ts src/hooks/__tests__/useMemoryCheck.test.ts src/store/ModelStore.ts src/screens/ModelsScreen/ModelCard/styles.ts src/screens/BenchmarkScreen/styles.ts
 
       - name: Run focused tests
         run: |
           cd "$PROJECT_DIR"
-          yarn jest --runInBand --runTestsByPath src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/__tests__/useMemoryCheck.test.ts
+          yarn jest --runInBand --coverage=false --runTestsByPath src/utils/__tests__/deviceCapabilities.test.ts src/screens/BenchmarkScreen/__tests__/BenchmarkScreen.test.tsx src/hooks/__tests__/useMemoryCheck.test.ts
