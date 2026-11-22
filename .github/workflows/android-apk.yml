@@ -64,6 +64,38 @@ jobs:
             fi
           fi
 
+      - name: Create temporary Firebase config for CI build
+        run: |
+          APP_GRADLE="$PROJECT_DIR/app/build.gradle"
+          PACKAGE_NAME="$(grep -E '^[[:space:]]*applicationId[[:space:]]+' "$APP_GRADLE" | head -1 | sed -E 's/^[[:space:]]*applicationId[[:space:]]+["]?([^" ]+).*/\\1/')"
+          if [ -z "$PACKAGE_NAME" ]; then
+            PACKAGE_NAME="$(grep -E '^[[:space:]]*namespace[[:space:]]+' "$APP_GRADLE" | head -1 | sed -E 's/^[[:space:]]*namespace[[:space:]]+["]?([^" ]+).*/\\1/')"
+          fi
+          if [ -z "$PACKAGE_NAME" ]; then
+            echo "::error::Could not determine Android application package"
+            exit 1
+          fi
+          cat > "$PROJECT_DIR/app/google-services.json" <<EOF
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "project_id": "ci-placeholder",
+              "storage_bucket": "ci-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890",
+                  "android_client_info": { "package_name": "$PACKAGE_NAME" }
+                },
+                "api_key": [ { "current_key": "CI_PLACEHOLDER_API_KEY" } ]
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+          echo "Generated temporary placeholder Firebase config for $PACKAGE_NAME (CI only)."
+
       - name: Build debug APK
         run: |
           cd "$PROJECT_DIR"
