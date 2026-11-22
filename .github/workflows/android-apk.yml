@@ -21,17 +21,20 @@ jobs:
       - name: Extract bundled project
         run: |
           unzip -q pocketpal-ai-improved-v3.zip -d extracted
-          PROJECT_DIR="$(find extracted -type f -name gradlew -print -quit | xargs -r dirname)"
-          if [ -z "$PROJECT_DIR" ]; then
+          GRADLEW="$(find extracted -type f -name gradlew -print -quit)"
+          if [ -z "$GRADLEW" ]; then
             echo "::error::No gradlew found inside bundled ZIP"
             find extracted -maxdepth 4 -type f | head -200
             exit 1
           fi
+          PROJECT_DIR="$(dirname "$GRADLEW")"
+          ROOT_DIR="$(dirname "$PROJECT_DIR")"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "ROOT_DIR=$ROOT_DIR" >> "$GITHUB_ENV"
           echo "Detected Android project at: $PROJECT_DIR"
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+n        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
@@ -42,9 +45,9 @@ jobs:
         with:
           node-version: '22.21.0'
 
-      - name: Install Yarn (if project requires it)
+      - name: Install JS dependencies (if needed)
         run: |
-          cd "$PROJECT_DIR"
+          cd "$ROOT_DIR"
           if [ -f package.json ]; then
             corepack enable
             if grep -q '"packageManager": *"yarn@' package.json; then
@@ -54,9 +57,12 @@ jobs:
             fi
             if [ -f yarn.lock ]; then
               yarn install --frozen-lockfile
+            elif [ -f package-lock.json ]; then
+              npm ci
             else
               yarn install
             fi
+          fi
 
       - name: Build debug APK
         run: |
@@ -68,6 +74,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PocketPal-debug-apk
-          path: \${{ env.PROJECT_DIR }}/**/build/outputs/apk/debug/*.apk
+          path: ${{ env.PROJECT_DIR }}/**/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
