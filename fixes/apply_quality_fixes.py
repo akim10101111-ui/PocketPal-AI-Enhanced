@@ -19,6 +19,12 @@ def replace_once(relative_path: str, old: str, new: str) -> None:
     source = path.read_text(encoding="utf-8")
     count = source.count(old)
     if count != 1:
+        if relative_path.endswith("BenchmarkScreen.tsx"):
+            print("--- benchmark source anchors ---")
+            for number, line in enumerate(source.splitlines(), 1):
+                if any(term in line for term in ("bench(", "speedPp", "speedTg", "BenchmarkResult", "modelDesc", "addResult")):
+                    print(f"{number}: {line}")
+            print("--- end benchmark source anchors ---")
         raise SystemExit(
             f"{relative_path}: expected exactly one match for transformation, found {count}"
         )
