@@ -80,6 +80,17 @@ jobs:
           corepack prepare yarn@1.22.22 --activate
           yarn install --frozen-lockfile
 
+      - name: Cache llama.rn CMake build tree
+        uses: actions/cache@v4
+        with:
+          path: pocketpal-source/node_modules/llama.rn/android/.cxx
+          key: ${{ runner.os }}-pocketpal-cxx-${{ hashFiles('pocketpal-source/yarn.lock', 'pocketpal-source/patches/**') }}
+          restore-keys: |
+            ${{ runner.os }}-pocketpal-cxx-
+
+      - name: Set up native compiler cache
+        uses: ./pocketpal-source/.github/actions/setup-ccache
+
       - name: Create temporary Firebase config for CI build
         run: |
           APP_GRADLE="$PROJECT_DIR/app/build.gradle"
@@ -119,7 +130,7 @@ jobs:
         run: |
           cd "$PROJECT_DIR"
           chmod +x ./gradlew
-          ./gradlew --no-daemon --stacktrace --build-cache --console=plain --max-workers=2 \
+          ./gradlew --no-daemon --stacktrace --build-cache --console=plain --max-workers=4 \
             -PreactNativeArchitectures=arm64-v8a \
             testProdDebugUnitTest assembleProdDebug
 
@@ -155,9 +166,32 @@ jobs:
           echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
 
       - name: Upload verified APK
+        id: upload-apk
         uses: actions/upload-artifact@v4
         with:
           name: PocketPal-prodDebug-arm64
           path: pocketpal-source/android/app/build/outputs/apk/prod/debug/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Delete outdated APK artifacts
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_ARTIFACT_ID: ${{ steps.upload-apk.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CURRENT_ARTIFACT_ID:-}" ]; then
+            echo "::error::The new APK artifact ID is missing; refusing to delete existing artifacts."
+            exit 1
+          fi
+
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name == "PocketPal-prodDebug-arm64") | .id' |
+          while IFS= read -r artifact_id; do
+            [ -n "$artifact_id" ] || continue
+            [ "$artifact_id" = "$CURRENT_ARTIFACT_ID" ] && continue
+            echo "Deleting outdated APK artifact $artifact_id"
+            gh api --silent --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+          done

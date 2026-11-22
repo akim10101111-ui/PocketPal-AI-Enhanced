@@ -1,0 +1,6 @@
+# Generated Android packages belong in CI artifacts, not source control.
+*.apk
+*.aab
+
+# Obsolete exported snapshots; the canonical source is in pocketpal-source/.
+/pocketpal-ai-improved-v*.zip
