@@ -161,7 +161,7 @@ describe('recommendedThreadCountForCpu', () => {
 # 2) Never save a benchmark result with empty/invalid throughput values.
 replace_once(
     "src/screens/BenchmarkScreen/BenchmarkScreen.tsx",
-    "      const modelDesc = modelStore.context.model.desc;\\n",
+    "      const modelDesc = modelStore.context.model.desc;\n",
     """      // Some native benchmark failures resolve with an empty object instead
       // of rejecting. Do not save blank, zero, NaN, or infinite measurements.
       if (
