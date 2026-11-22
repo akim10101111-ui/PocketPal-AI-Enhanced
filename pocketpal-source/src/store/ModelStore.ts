@@ -56,6 +56,7 @@ import {classify, ClassifyPlatform} from '../services/deviceRules/classify';
 import {deriveUrl, parseDeviceRules} from '../services/deviceRules/parse';
 import {fetchRules} from '../services/deviceRules/rules';
 import {readDeviceSignals} from '../services/deviceRules/signals';
+import {filterCandidatesByMinimumRam} from '../services/deviceRules/selection';
 import {
   DeviceRules,
   DeviceSignals,
@@ -995,7 +996,14 @@ class ModelStore {
       rules.classifier,
       Platform.OS as ClassifyPlatform,
     );
-    const flat = rules.tiers[tier].models.flatMap(candidate => {
+    // Honor the physical-RAM floor from the model rules before exposing
+    // a recommendation. The metadata was parsed but previously never enforced,
+    // so devices could be shown models known to require more RAM than they have.
+    const ramEligibleCandidates = filterCandidatesByMinimumRam(
+      rules.tiers[tier].models,
+      signals.ramBytes,
+    );
+    const flat = ramEligibleCandidates.flatMap(candidate => {
       const {hfModel, modelFile} = this.candidateToPair(candidate);
       const llm = hfAsModel(hfModel, modelFile);
       let named = candidate.displayName
