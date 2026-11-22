@@ -185,17 +185,6 @@ export const BenchmarkScreen: React.FC = observer(() => {
             `(prompt=${ppAvg}, generation=${tgAvg})`,
         );
       }
-      // Some native benchmark failures resolve with an empty object instead
-      // of rejecting. Do not save blank, zero, NaN, or infinite measurements.
-      if (
-        !Number.isFinite(ppAvg) ||
-        ppAvg <= 0 ||
-        !Number.isFinite(tgAvg) ||
-        tgAvg <= 0
-      ) {
-        throw new Error('Benchmark returned invalid throughput metrics');
-      }
-
       const modelDesc = modelStore.context.model.desc;
       const modelSize = modelStore.context.model.size;
       const modelNParams = modelStore.context.model.nParams;
