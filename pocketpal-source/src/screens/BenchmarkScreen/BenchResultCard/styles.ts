@@ -5,7 +5,7 @@ export const createStyles = (theme: Theme) =>
   StyleSheet.create({
     resultCard: {
       backgroundColor: theme.colors.surface,
-      borderRadius: 16,
+      borderRadius: 20,
       borderWidth: 1,
       borderColor: theme.colors.surfaceVariant,
     },
